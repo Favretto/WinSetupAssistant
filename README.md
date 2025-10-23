@@ -48,6 +48,11 @@ L'app utilizza solo le API native di Windows ed è progettata per essere leggera
 
 Questo progetto è rilasciato sotto licenza [MIT](LICENSE).
 
+## Disclaimer
+
+Questo software è fornito **“così com’è”**, senza alcuna garanzia.  
+L’uso è a **proprio rischio**. L'autore non si assume responsabilità per eventuali danni diretti o indiretti derivanti dall’uso del software.
+
 ## Autore
 
 Alessandro Favretto
