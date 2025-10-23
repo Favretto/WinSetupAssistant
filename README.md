@@ -41,7 +41,7 @@ L'app utilizza solo le API native di Windows ed è progettata per essere leggera
 
 ## Requisiti
 
-- Windows 10 o successivi (x64)  
+- Windows 10 (x86 e x64) o successivi  
 - Privilegi di amministratore per alcune funzioni (AHCI, Task Manager, Command Prompt)
 
 ## Licenza
