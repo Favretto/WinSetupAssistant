@@ -83,8 +83,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             AppendMenu(hHelpMenu, MF_STRING, IDM_WINVER, L"Versione OS");
             AppendMenu(hHelpMenu, MF_STRING, IDM_SYSINFO, L"Informazioni di Sistema");
             AppendMenu(hHelpMenu, MF_SEPARATOR, 0, NULL);
-            AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"About");
+            AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"Circa");
             AppendMenu(hTrayMenu, MF_POPUP, (UINT_PTR)hHelpMenu, L"?");
+            AppendMenu(hTrayMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hTrayMenu, MF_STRING, IDM_FILE_EXIT, L"Esci da WTool");
             
             POINT pt;
             GetCursorPos(&pt);
@@ -808,7 +810,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     AppendMenu(hHelpMenu, MF_STRING, IDM_WINVER, L"Versione OS");
     AppendMenu(hHelpMenu, MF_STRING, IDM_SYSINFO, L"Informazioni di Sistema");
     AppendMenu(hHelpMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"About");
+    AppendMenu(hHelpMenu, MF_STRING, IDM_HELP_ABOUT, L"Circa");
  
     // Aggiunge i sottomenu alla barra principale ...
     AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR) hFileMenu, L"&File");
