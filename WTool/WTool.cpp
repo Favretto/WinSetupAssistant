@@ -1,11 +1,21 @@
-﻿// Applicazione concepita per semplificare la configurazione iniziale di un sistema operativo appena installato,
-// senza la necessità di componenti esterni.
-// Basata esclusivamente sulle API native di Windows, è progettata per garantire un utilizzo minimo di risorse e
-// un impatto nullo sul sistema, mantenendolo leggero e pulito.
+﻿//
+// APPLICAZIONE CONCEPITA PER SEMPLIFICARE LA CONFIGURAZIONE INIZIALE DI UN SISTEMA OPERATIVO APPENA INSTALLATO,
+// SENZA LA NECESSITÀ DI COMPONENTI ESTERNI.
+// BASATA ESCLUSIVAMENTE SULLE API NATIVE DI WINDOWS, È PROGETTATA PER GARANTIRE UN UTILIZZO MINIMO DI RISORSE E
+// UN IMPATTO NULLO SUL SISTEMA, MANTENENDLO LEGGERO E PULITO.
+// ------------------------
+// WTool - Versione 1.0
+// Alessandro Favretto
+// 24/10/2025
+// ------------------------
+//
 
 #include <windows.h>
 #include <shellapi.h>   // Aggiunto: necessario per la tray icon (Shell_NotifyIcon)
 #include "resource.h"
+
+#include <shlobj.h>     // GODMODE: SHGetFolderPathW, CSIDL_DESKTOP
+#include <strsafe.h>    // GODMODE: StringCchPrintfW
 
 #define WM_TRAYICON (WM_USER + 1)   // Aggiunto: messaggio personalizzato per la tray icon
 NOTIFYICONDATA nid = { 0 };         // Aggiunto: struttura per l’icona di notifica
@@ -25,8 +35,11 @@ NOTIFYICONDATA nid = { 0 };         // Aggiunto: struttura per l’icona di noti
 #define BTN_DISKPART 14
 #define BTN_DISKMAN 15
 #define BTN_WAD 16
+#define BTN_UNINSTALLER 17
+#define BTN_MRT 18
 
 #define IDM_FILE_EXIT  101
+#define IDM_GODMODE 120
 #define IDM_DISKPART 105
 #define IDM_TASKMGR 106
 #define IDM_SYSINFO 107
@@ -34,17 +47,33 @@ NOTIFYICONDATA nid = { 0 };         // Aggiunto: struttura per l’icona di noti
 #define IDM_WINVER 102
 #define IDM_HELP_ABOUT 103
 #define IDM_ALWAYS_ON_TOP 109
+#define IDM_CLIPBOARD 118
+#define IDM_SCREENSHOT 119
 #define IDM_TEMPDIR 110
 #define IDM_USRDIR 111
 #define IDM_WINDIR 112
 #define IDM_SUU 113
 #define IDM_SUC 114
 #define IDM_ENABLE_AHCI 115
+#define IDM_GPU_RESET 117
 #define IDM_REFRESH_STATUES 116
+
+#define IDM_HIDDEN_FILES 121
+#define IDM_SYS_FILES 122
+#define IDM_ALWAYS_EXT 123
+// #define IDM_PATH 124         // NON ESISTE PIU' IN WINDOWS 11 ...
+// #define IDM_PATH_ADDRBAR 125 // NON ESISTE PIU' IN WINDOWS 11 ...
+#define IDM_MYCOMPUTER 127
+#define IDM_TRASH 128
+#define IDM_NETWORK 129
+#define IDM_FOLDER_OPTS_APPLY 126
+#define IDM_DESKTOP_ICO_APPLY 130
 
 #define IDM_OPEN_GUI 200
 
 WCHAR szTempPath[MAX_PATH];
+
+HANDLE hMutex = NULL;
 
 HWND hLabel = NULL;
 HWND hLabelAHCI = NULL;
@@ -57,14 +86,57 @@ bool SetAHCI();
 bool IsRunningAsAdmin();
 bool IsWindows10OrGreater();
 
+// LAVORANO AL CONTRARIO 0=SHOWN, 1=HIDDEN
+BOOL bMyComputer = FALSE;
+BOOL bTrash = FALSE;
+BOOL bNetwork = FALSE;
+
 BOOL isTopMost = FALSE;
 BOOL isAppRunningAsAdmin = FALSE;
+
+BOOL bShowHiddenFiles = TRUE;
+BOOL bShowSysFiles = TRUE;
+BOOL bShowAlwaysExt = TRUE;
+//BOOL bShowPath = TRUE;
+//BOOL bShowPathAddrBar = TRUE;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     HINSTANCE retSE = NULL;
 
     switch (msg) {
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+
+        // Imposta colore di sfondo nero e linee opache
+        SetBkColor(hdc, RGB(96, 96, 96));           // sfondo grigio scuro ...
+        SetBkMode(hdc, OPAQUE);                     // disegna lo sfondo con il colore impostato ...
+
+        // Penna Navy per il bordo
+        HPEN hPen = CreatePen(PS_SOLID, 2, RGB(0, 0, 128)); // Navy ...
+
+        // Pennello a linee oblique
+        HBRUSH hBrush = CreateHatchBrush(HS_BDIAGONAL, RGB(210, 240, 255));
+
+        // Seleziona penna e pennello nel contesto
+        HGDIOBJ oldPen = SelectObject(hdc, hPen);
+        HGDIOBJ oldBrush = SelectObject(hdc, hBrush);
+
+        // Disegna i rettangoli con sfondo nero e linee navy
+        Rectangle(hdc, 315, 44, 575, 166);
+        Rectangle(hdc, 315, 204, 576, 326);
+
+        // Ripristina e libera
+        SelectObject(hdc, oldPen);
+        SelectObject(hdc, oldBrush);
+        DeleteObject(hPen);
+        DeleteObject(hBrush);
+
+        EndPaint(hwnd, &ps);
+        break;
+    }
+
     case WM_TRAYICON:
         // Aggiunto: gestisce i click sull’icona della tray
         if (lParam == WM_LBUTTONDBLCLK)
@@ -215,6 +287,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 MessageBox(hwnd, L"Comando non trovato!", L"SystemPropertiesPerformance not found ...", MB_OK | MB_ICONERROR);
             }
             break;
+        case BTN_UNINSTALLER:
+            // retSE = ShellExecute(hwnd, L"open", L"ms-settings:appsfeatures", NULL, NULL, SW_SHOWNORMAL);
+            retSE = ShellExecute(hwnd, L"open", L"shell:AppsFolder", NULL, NULL, SW_SHOWNORMAL);
+            if ((INT_PTR)retSE <= 32) {
+                MessageBox(hwnd, L"Comando non trovato!", L"shell:AppsFolder not found ...", MB_OK | MB_ICONERROR);
+            }
+            break;
+        case BTN_MRT:
+            retSE = ShellExecute(hwnd, L"runas", L"mrt.exe", NULL, NULL, SW_SHOWNORMAL);
+            if ((INT_PTR)retSE == 5)
+                MessageBox(hwnd, L"Permessi insufficienti per accedere alla funzione!", L"Errore", MB_OK | MB_ICONERROR);
+            else if ((INT_PTR)retSE <= 32)
+                MessageBox(hwnd, L"Impossibile aprire MRT.EXE", L"Errore", MB_OK | MB_ICONERROR);
+            break;
         case BTN_DISKPART:
             retSE = ShellExecute(hwnd, L"runas", L"diskpart.exe", NULL, NULL, SW_SHOWNORMAL);
             if((INT_PTR)retSE == 5)
@@ -264,6 +350,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 MessageBox(hwnd, L"Comando non trovato!", L"taskmgr.exe not found ...", MB_OK | MB_ICONERROR);
 
             break;
+        case IDM_GODMODE: {
+            WCHAR desktopPath[MAX_PATH];
+            if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_DESKTOP, NULL, 0, desktopPath)))
+            {
+                // Costruisci percorso completo
+                WCHAR godModePath[MAX_PATH];
+                StringCchPrintfW(
+                    godModePath,
+                    MAX_PATH,
+                    L"%s\\GodMode.{ED7BA470-8E54-465E-825C-99712043E01C}",
+                    desktopPath
+                );
+
+                // Crea la cartella
+                if (CreateDirectoryW(godModePath, NULL))
+                {
+                    MessageBoxW(NULL, L"Cartella GodMode creata con successo sul Desktop.", L"Successo", MB_OK | MB_ICONINFORMATION);
+                }
+                else
+                {
+                    DWORD err = GetLastError();
+                    if (err == ERROR_ALREADY_EXISTS)
+                        MessageBoxW(NULL, L"La cartella esiste già.", L"Informazione", MB_OK | MB_ICONINFORMATION);
+                    else
+                        MessageBoxW(NULL, L"Errore nella creazione della cartella.", L"Errore", MB_OK | MB_ICONERROR);
+                }
+            }
+
+            break;
+        }
         case IDM_SYSINFO:
             retSE = ShellExecute(hwnd, L"open", L"msinfo32.exe", NULL, NULL, SW_SHOWNORMAL);
             if ((INT_PTR)retSE <= 32) {
@@ -346,6 +462,210 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
 
             break;
+        case IDM_HIDDEN_FILES:
+            bShowHiddenFiles = !bShowHiddenFiles;
+            CheckMenuItem(GetMenu(hwnd), IDM_HIDDEN_FILES, MF_BYCOMMAND | (bShowHiddenFiles ? MF_CHECKED : MF_UNCHECKED));
+            break;
+        case IDM_SYS_FILES:
+            bShowSysFiles = !bShowSysFiles;
+            CheckMenuItem(GetMenu(hwnd), IDM_SYS_FILES, MF_BYCOMMAND | (bShowSysFiles ? MF_CHECKED : MF_UNCHECKED));
+            break;
+        case IDM_ALWAYS_EXT:
+            bShowAlwaysExt = !bShowAlwaysExt;
+            CheckMenuItem(GetMenu(hwnd), IDM_ALWAYS_EXT, MF_BYCOMMAND | (bShowAlwaysExt ? MF_CHECKED : MF_UNCHECKED));
+            break;
+        //case IDM_PATH:
+        //    bShowPath = !bShowPath;
+        //    CheckMenuItem(GetMenu(hwnd), IDM_PATH, MF_BYCOMMAND | (bShowPath ? MF_CHECKED : MF_UNCHECKED));
+        //    break;
+        //case IDM_PATH_ADDRBAR:
+        //    bShowPathAddrBar = !bShowPathAddrBar;
+        //    CheckMenuItem(GetMenu(hwnd), IDM_PATH_ADDRBAR, MF_BYCOMMAND | (bShowPathAddrBar ? MF_CHECKED : MF_UNCHECKED));
+        //    break;
+        case IDM_MYCOMPUTER:
+            bMyComputer = !bMyComputer;
+            CheckMenuItem(GetMenu(hwnd), IDM_MYCOMPUTER, MF_BYCOMMAND | (bMyComputer ? MF_UNCHECKED : MF_CHECKED));
+            break;
+        case IDM_TRASH:
+            bTrash = !bTrash;
+            CheckMenuItem(GetMenu(hwnd), IDM_TRASH, MF_BYCOMMAND | (bTrash ? MF_UNCHECKED : MF_CHECKED));
+            break;
+        case IDM_NETWORK:
+            bNetwork = !bNetwork;
+            CheckMenuItem(GetMenu(hwnd), IDM_NETWORK, MF_BYCOMMAND | (bNetwork ? MF_UNCHECKED : MF_CHECKED));
+            break;
+        case IDM_DESKTOP_ICO_APPLY: {
+            HKEY hKey;
+            if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel",
+                0,
+                KEY_SET_VALUE,
+                &hKey) == ERROR_SUCCESS)
+            {
+                if (RegSetValueExW(hKey, L"{20D04FE0-3AEA-1069-A2D8-08002B30309D}", 0, REG_DWORD, (BYTE*)&bMyComputer, sizeof(DWORD)) != ERROR_SUCCESS ||
+                    RegSetValueExW(hKey, L"{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}", 0, REG_DWORD, (BYTE*)&bNetwork, sizeof(DWORD)) != ERROR_SUCCESS ||
+                    RegSetValueExW(hKey, L"{645FF040-5081-101B-9F08-00AA002F954E}", 0, REG_DWORD, (BYTE*)&bTrash, sizeof(DWORD)) != ERROR_SUCCESS)
+                {
+                    MessageBoxW(NULL, L"Errore scrivendo uno o più valori di registro.", L"Errore", MB_ICONERROR);
+                    RegCloseKey(hKey);
+                } else {
+                    RegCloseKey(hKey);
+
+                    // Termina la shell
+                    HWND hShellWnd = FindWindow(L"Shell_TrayWnd", NULL);
+                    if (hShellWnd) {
+                        DWORD dwPid;
+                        GetWindowThreadProcessId(hShellWnd, &dwPid);
+                        HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwPid);
+                        if (hProcess) {
+                            TerminateProcess(hProcess, 0);
+                            CloseHandle(hProcess);
+
+                            // Aspetta un po' prima di riavviare
+                            Sleep(2000);
+                        }
+                    }
+
+                    // Riavvia solo la shell (taskbar e desktop)
+                    ShellExecuteW(NULL, L"open", L"explorer.exe", NULL, NULL, SW_SHOWDEFAULT);
+
+                    MessageBoxW(NULL, L"Icone desktop aggiornate correttamente!", L"Info", MB_ICONINFORMATION);
+                }
+            } else {
+                MessageBoxW(NULL, L"Impossibile aprire la chiave di registro.", L"Errore", MB_ICONERROR);
+            }
+
+            break;
+        }
+        case IDM_FOLDER_OPTS_APPLY: {
+            HKEY hKey;
+            if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+                0,
+                KEY_SET_VALUE,
+                &hKey) != ERROR_SUCCESS) {
+                MessageBoxW(NULL, L"Impossibile aprire la chiave di registro.", L"Errore", MB_ICONERROR);
+            } else {
+                BOOL bHideKnownFilesExt = !bShowAlwaysExt;
+
+                // Imposta i valori nel registro
+                if (RegSetValueExW(hKey, L"Hidden", 0, REG_DWORD, (BYTE*)&bShowHiddenFiles, sizeof(DWORD)) != ERROR_SUCCESS ||
+                    RegSetValueExW(hKey, L"ShowSuperHidden", 0, REG_DWORD, (BYTE*)&bShowSysFiles, sizeof(DWORD)) != ERROR_SUCCESS ||
+                    RegSetValueExW(hKey, L"HideFileExt", 0, REG_DWORD, (BYTE*)&bHideKnownFilesExt, sizeof(DWORD)) != ERROR_SUCCESS) { // ||
+                    //RegSetValueExW(hKey, L"FullPath", 0, REG_DWORD, (BYTE*)&bShowPath, sizeof(DWORD)) != ERROR_SUCCESS ||
+                    //RegSetValueExW(hKey, L"FullPathAddress", 0, REG_DWORD, (BYTE*)&bShowPathAddrBar, sizeof(DWORD)) != ERROR_SUCCESS) {
+                    MessageBoxW(NULL, L"Errore scrivendo uno o più valori di registro.", L"Errore", MB_ICONERROR);
+                    RegCloseKey(hKey);
+                } else {
+                    RegCloseKey(hKey);
+                    
+                    // Termina la shell
+                    HWND hShellWnd = FindWindow(L"Shell_TrayWnd", NULL);
+                    if (hShellWnd) {
+                        DWORD dwPid;
+                        GetWindowThreadProcessId(hShellWnd, &dwPid);
+                        HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwPid);
+                        if (hProcess) {
+                            TerminateProcess(hProcess, 0);
+                            CloseHandle(hProcess);
+                        }
+                    }
+
+                    // Riavvia solo la shell (taskbar e desktop)
+                    ShellExecuteW(NULL, L"open", L"explorer.exe", NULL, NULL, SW_SHOWDEFAULT);
+
+                    MessageBoxW(NULL, L"Opzioni Cartella di aggiornate correttamente!", L"Info", MB_ICONINFORMATION);
+                }
+            }
+
+            break;
+        }
+        case IDM_GPU_RESET: {
+            
+            INPUT inputs[8] = {};
+
+            // CTRL
+            inputs[0].type = INPUT_KEYBOARD;
+            inputs[0].ki.wVk = VK_CONTROL;
+
+            // SHIFT
+            inputs[1].type = INPUT_KEYBOARD;
+            inputs[1].ki.wVk = VK_SHIFT;
+
+            // WIN
+            inputs[2].type = INPUT_KEYBOARD;
+            inputs[2].ki.wVk = VK_LWIN;
+
+            // B
+            inputs[3].type = INPUT_KEYBOARD;
+            inputs[3].ki.wVk = 'B';
+
+            // Rilascio in ordine inverso
+            inputs[4].type = INPUT_KEYBOARD; inputs[4].ki.wVk = 'B'; inputs[4].ki.dwFlags = KEYEVENTF_KEYUP;
+            inputs[5].type = INPUT_KEYBOARD; inputs[5].ki.wVk = VK_LWIN; inputs[5].ki.dwFlags = KEYEVENTF_KEYUP;
+            inputs[6].type = INPUT_KEYBOARD; inputs[6].ki.wVk = VK_SHIFT; inputs[6].ki.dwFlags = KEYEVENTF_KEYUP;
+            inputs[7].type = INPUT_KEYBOARD; inputs[7].ki.wVk = VK_CONTROL; inputs[7].ki.dwFlags = KEYEVENTF_KEYUP;
+
+            SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+            
+            break;
+        }
+        case IDM_CLIPBOARD: { // WIN + V
+            INPUT inputs[4] = {};
+
+            // WIN
+            inputs[0].type = INPUT_KEYBOARD;
+            inputs[0].ki.wVk = VK_LWIN;
+
+            // V
+            inputs[1].type = INPUT_KEYBOARD;
+            inputs[1].ki.wVk = 'V';
+
+            // Rilascio in ordine inverso
+            inputs[2].type = INPUT_KEYBOARD;
+            inputs[2].ki.wVk = 'V';
+            inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
+
+            inputs[3].type = INPUT_KEYBOARD;
+            inputs[3].ki.wVk = VK_LWIN;
+            inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+
+            // Invio della sequenza
+            SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+
+            break;
+        }
+        case IDM_SCREENSHOT: { // WIN + SHIFT + S
+            INPUT inputs[6] = {};
+
+            // WIN
+            inputs[0].type = INPUT_KEYBOARD;
+            inputs[0].ki.wVk = VK_LWIN;
+
+            // SHIFT
+            inputs[1].type = INPUT_KEYBOARD;
+            inputs[1].ki.wVk = VK_SHIFT;
+
+            // S
+            inputs[2].type = INPUT_KEYBOARD;
+            inputs[2].ki.wVk = 'S';
+
+            // --- Rilascio in ordine inverso ---
+            inputs[3].type = INPUT_KEYBOARD;
+            inputs[3].ki.wVk = 'S';
+            inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+
+            inputs[4].type = INPUT_KEYBOARD;
+            inputs[4].ki.wVk = VK_SHIFT;
+            inputs[4].ki.dwFlags = KEYEVENTF_KEYUP;
+
+            inputs[5].type = INPUT_KEYBOARD;
+            inputs[5].ki.wVk = VK_LWIN;
+            inputs[5].ki.dwFlags = KEYEVENTF_KEYUP;
+
+            // Invio della sequenza
+            SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+        }
         case IDM_REFRESH_STATUES:
             // Controllo se è IDE (Legacy) o AHCI ...
             if (isAHCI())
@@ -404,7 +724,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             hCwfp == GetDlgItem(hwnd, BTN_DISKPART) ||
             hCwfp == GetDlgItem(hwnd, BTN_DISKMAN) ||
             hCwfp == GetDlgItem(hwnd, BTN_WAD) ||
-            hCwfp == GetDlgItem(hwnd, BTN_PERFS))
+            hCwfp == GetDlgItem(hwnd, BTN_PERFS) ||
+            hCwfp == GetDlgItem(hwnd, BTN_UNINSTALLER) ||
+            hCwfp == GetDlgItem(hwnd, BTN_MRT)
+            )
         {
             SetCursor(LoadCursor(NULL, IDC_HAND));
             return TRUE; // messaggio gestito
@@ -532,6 +855,16 @@ bool IsRunningAsAdmin()
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+    // Impedisce l'esecuzione multipla ...
+    hMutex = CreateMutexW(NULL, TRUE, L"WTool_Mutex_SingleInstance");
+
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        MessageBoxW(NULL, L"Processo già in esecuzione.", L"WTool", MB_OK | MB_ICONEXCLAMATION);
+        if (NULL != hMutex) CloseHandle(hMutex);
+        return 0; // termina subito
+    }
+
+    // Richiede minimo Windows 10 ...
     if (!IsWindows10OrGreater()) {
         MessageBoxW(NULL,
             L"Questa applicazione richiede Windows 10 o versioni successive.",
@@ -730,9 +1063,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     CreateWindowEx(0, L"BUTTON", L"Disk Part",
         WS_CHILD | WS_VISIBLE,
-        320, 210, 250, 30,
+        320, 210, 125, 30,
         hwnd, (HMENU)BTN_DISKPART, hInstance, NULL);
-    
+
+    CreateWindowEx(0, L"BUTTON", L"Gestione Dischi",
+        WS_CHILD | WS_VISIBLE,
+        445, 210, 125, 30,
+        hwnd, (HMENU)BTN_DISKMAN, hInstance, NULL);
+
     // BEGIN: DISKPART TEXTBOX MULTILINE ...
     // 
     HWND hDiskPartInfo = CreateWindowExW(
@@ -749,20 +1087,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     SendMessageW(hDiskPartInfo, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     SetWindowTextW(hDiskPartInfo, L"Dove non arriva Gestione Dischi:\r\nUsare DISKPART\r\n\r\nEsempio pulizia disco:\r\nlist disk\r\nselect disk 1\r\nclean\r\n\r\nEsempio eliminazione di una partizione:\r\nselect disk 1\r\nlist partition\r\nselect partition 3\r\ndelete partition\r\n\r\nPer uscire:\r\nexit");
-    // END
 
-    CreateWindowEx(0, L"BUTTON", L"Gestione Dischi",
-        WS_CHILD | WS_VISIBLE,
-        320, 330, 250, 30,
-        hwnd, (HMENU)BTN_DISKMAN, hInstance, NULL);
-
-    // BEGIN: STARTUP 20251021AF...
-    //
     CreateWindowEx(0, L"BUTTON", L"Funzionalità OS",
         WS_CHILD | WS_VISIBLE,
-        320, 370, 250, 30,
+        320, 330, 125, 30,
         hwnd, (HMENU)BTN_WAD, hInstance, NULL);
 
+    CreateWindowEx(0, L"BUTTON", L"Apps Manager",
+        WS_CHILD | WS_VISIBLE,
+        445, 330, 125, 30,
+        hwnd, (HMENU)BTN_UNINSTALLER, hInstance, NULL);
+    
+    CreateWindowEx(0, L"BUTTON", L"Rimozione Malware",
+        WS_CHILD | WS_VISIBLE,
+        320, 370, 250, 30,
+        hwnd, (HMENU)BTN_MRT, hInstance, NULL);
+
+    //370
+    // 
     //CreateWindowEx(0, L"BUTTON", L"StartUp Common",
     //    WS_CHILD | WS_VISIBLE,
     //    445, 370, 125, 30,
@@ -783,6 +1125,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     HMENU hGoTo = CreateMenu();         // Navigazione Cartelle Notevoli
     HMENU hStartUp = CreateMenu();      // Navigazione Avvio Automatico
 
+    HMENU hFolderOpts = CreateMenu();   // Opzioni files e cartelle
+    HMENU hDesktopIco = CreateMenu();   // Opzioni icone Desktop
+
+    // Opzioni files e cartelle ...
+    AppendMenu(hFolderOpts, MF_STRING, IDM_HIDDEN_FILES, L"Files nascosti");
+    AppendMenu(hFolderOpts, MF_STRING, IDM_SYS_FILES, L"Files di Sistema");
+    AppendMenu(hFolderOpts, MF_STRING, IDM_ALWAYS_EXT, L"Estensione files noti");
+    //AppendMenu(hFolderOpts, MF_STRING, IDM_PATH, L"Percorso completo sulla barra del titolo");
+    //AppendMenu(hFolderOpts, MF_STRING, IDM_PATH_ADDRBAR, L"Percorso completo sulla barra del degli indirizzi");
+    AppendMenu(hFolderOpts, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFolderOpts, MF_STRING, IDM_FOLDER_OPTS_APPLY, L"Applica!");
+
+    AppendMenu(hDesktopIco, MF_STRING, IDM_MYCOMPUTER, L"My Computer sul Desktop");
+    AppendMenu(hDesktopIco, MF_STRING, IDM_TRASH, L"Cestino sul Desktop");
+    AppendMenu(hDesktopIco, MF_STRING, IDM_NETWORK, L"Rete sul Desktop");
+    AppendMenu(hDesktopIco, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hDesktopIco, MF_STRING, IDM_DESKTOP_ICO_APPLY, L"Applica!");
+    
+    // e abilito tutte le voci ...
+    CheckMenuItem(hFolderOpts, IDM_HIDDEN_FILES, MF_BYCOMMAND | MF_CHECKED);
+    CheckMenuItem(hFolderOpts, IDM_SYS_FILES, MF_BYCOMMAND | MF_CHECKED);
+    CheckMenuItem(hFolderOpts, IDM_ALWAYS_EXT, MF_BYCOMMAND | MF_CHECKED);
+    //CheckMenuItem(hFolderOpts, IDM_PATH, MF_BYCOMMAND | MF_CHECKED);
+    //CheckMenuItem(hFolderOpts, IDM_PATH_ADDRBAR, MF_BYCOMMAND | MF_CHECKED);
+    CheckMenuItem(hDesktopIco, IDM_MYCOMPUTER, MF_BYCOMMAND | MF_CHECKED);
+    CheckMenuItem(hDesktopIco, IDM_TRASH, MF_BYCOMMAND | MF_CHECKED);
+    CheckMenuItem(hDesktopIco, IDM_NETWORK, MF_BYCOMMAND | MF_CHECKED);
+
     // Navigazione Cartelle Notevoli: Aggiunge voci al sotto-sottomenu ...
     AppendMenu(hGoTo, MF_STRING, IDM_TEMPDIR, L"Cartella TEMP");
     AppendMenu(hGoTo, MF_STRING, IDM_USRDIR, L"Cartella USER");
@@ -799,12 +1169,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // Aggiunge voci ai sottomenu ...
     AppendMenu(hFileMenu, MF_STRING, IDM_TASKMGR, L"Task Manager");
     AppendMenu(hFileMenu, MF_STRING, IDM_ADMCMD, L"Console (Admin)");
+    AppendMenu(hFileMenu, MF_STRING, IDM_GODMODE, L"Crea God Mode sul desktop");
     AppendMenu(hFileMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hFileMenu, MF_STRING, IDM_FILE_EXIT, L"Esci");
-
+    
     AppendMenu(hWindowMenu, MF_STRING, IDM_ALWAYS_ON_TOP, L"Sempre in primo piano");
+    AppendMenu(hWindowMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hWindowMenu, MF_STRING, IDM_CLIPBOARD, L"Cronologia Appunti (WIN-V)");
+    AppendMenu(hWindowMenu, MF_STRING, IDM_SCREENSHOT, L"Cattura Schermo (WIN-SHIFT-S)");
 
     AppendMenu(hActions, MF_STRING, IDM_ENABLE_AHCI, L"Abilita AHCI");
+    AppendMenu(hActions, MF_STRING, IDM_GPU_RESET, L"Reset GPU (CTRL-WIN-SHIFT-B)");
+    AppendMenu(hActions, MF_POPUP, (UINT_PTR)hFolderOpts, L"Opzioni Cartella ...");
+    AppendMenu(hActions, MF_POPUP, (UINT_PTR)hDesktopIco, L"Icone Desktop ...");
+    AppendMenu(hActions, MF_SEPARATOR, 0, NULL);
     AppendMenu(hActions, MF_STRING, IDM_REFRESH_STATUES, L"Aggiona");
 
     AppendMenu(hHelpMenu, MF_STRING, IDM_WINVER, L"Versione OS");
@@ -847,6 +1225,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    if(NULL != hMutex) CloseHandle(hMutex);
 
     return (int)msg.wParam;
 }
