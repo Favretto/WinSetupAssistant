@@ -85,6 +85,7 @@ bool isAHCI();
 bool SetAHCI();
 bool IsRunningAsAdmin();
 bool IsWindows10OrGreater();
+BOOL is64Bit();
 
 // LAVORANO AL CONTRARIO 0=SHOWN, 1=HIDDEN
 BOOL bMyComputer = FALSE;
@@ -294,13 +295,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 MessageBox(hwnd, L"Comando non trovato!", L"shell:AppsFolder not found ...", MB_OK | MB_ICONERROR);
             }
             break;
-        case BTN_MRT:
-            retSE = ShellExecute(hwnd, L"runas", L"mrt.exe", NULL, NULL, SW_SHOWNORMAL);
+        case BTN_MRT:{
+            HINSTANCE retSE = NULL;
+            if(is64Bit()){
+                retSE = ShellExecute(hwnd, L"runas", L"MRT.EXE", NULL, NULL, SW_SHOWNORMAL);
+            }else{
+                retSE = ShellExecute(hwnd, L"open", L"ms-settings:windowsdefender", NULL, NULL, SW_SHOWNORMAL);
+            }
+            
             if ((INT_PTR)retSE == 5)
                 MessageBox(hwnd, L"Permessi insufficienti per accedere alla funzione!", L"Errore", MB_OK | MB_ICONERROR);
             else if ((INT_PTR)retSE <= 32)
-                MessageBox(hwnd, L"Impossibile aprire MRT.EXE", L"Errore", MB_OK | MB_ICONERROR);
+                MessageBox(hwnd, L"Impossibile aprire lo strumento antimalware!", L"Errore", MB_OK | MB_ICONERROR);
             break;
+        }
         case BTN_DISKPART:
             retSE = ShellExecute(hwnd, L"runas", L"diskpart.exe", NULL, NULL, SW_SHOWNORMAL);
             if((INT_PTR)retSE == 5)
@@ -419,12 +427,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 CheckMenuItem(GetMenu(hwnd), IDM_ALWAYS_ON_TOP, MF_BYCOMMAND | MF_CHECKED);
 
             break;
-        case IDM_HELP_ABOUT:
-            MessageBox(hwnd, L"WTool v1.0 (x64) per Windows 10 e Windows 11\n\nRealizzato da Alessandro Favretto.\n\n\nApplicazione standalone realizzata in VC++ e WinAPI.",
-                L"Informazioni su WTool\n",
-                MB_OK | MB_ICONINFORMATION);
+        case IDM_HELP_ABOUT: {
+            if (is64Bit()) {
+                MessageBox(hwnd, L"WTool v1.0 (x64) per Windows 10 e Windows 11\n\nRealizzato da Alessandro Favretto.\n\n\nApplicazione standalone realizzata in VC++ e WinAPI.",
+                    L"Informazioni su WTool\n",
+                    MB_OK | MB_ICONINFORMATION);
+            } else {
+                MessageBox(hwnd, L"WTool v1.0 (x86) per Windows 10 e Windows 11\n\nRealizzato da Alessandro Favretto.\n\n\nApplicazione standalone realizzata in VC++ e WinAPI.",
+                    L"Informazioni su WTool\n",
+                    MB_OK | MB_ICONINFORMATION);
+            }
             break;
-
+        }
             // ESECUZIONE AUTOMATICA ...
             // shell:startup
             // shell:common startup
@@ -768,6 +782,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
+BOOL is64Bit() {
+#if defined(_WIN64)
+    return TRUE;  // Processo a 64 bit
+#else
+    return FALSE; // Processo a 32 bit
+#endif
+}
+
 void SetAlwaysOnTop(HWND hwnd, bool enable)
 {
     SetWindowPos(
@@ -898,26 +920,49 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     int y = (screenHeight - 480) / 2;
 
     isAppRunningAsAdmin = IsRunningAsAdmin();
-    if(isAppRunningAsAdmin)
-        hwnd = CreateWindowEx(
-            0,
-            L"MiniLauncher",
-            L"WTool v.1.0 (x64) - {Administrator}",
-            WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-            x, y,
-            640, 480,
-            NULL, NULL, hInstance, NULL
-        );
-    else
-        hwnd = CreateWindowEx(
-            0,
-            L"MiniLauncher",
-            L"WTool v.1.0 (x64)",
-            WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-            x, y,
-            640, 480,
-            NULL, NULL, hInstance, NULL
-        );
+    if (is64Bit()) {
+        if (isAppRunningAsAdmin)
+            hwnd = CreateWindowEx(
+                0,
+                L"MiniLauncher",
+                L"WTool v1.0 (x64) - {Administrator}",
+                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                x, y,
+                640, 480,
+                NULL, NULL, hInstance, NULL
+            );
+        else
+            hwnd = CreateWindowEx(
+                0,
+                L"MiniLauncher",
+                L"WTool v1.0 (x64)",
+                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                x, y,
+                640, 480,
+                NULL, NULL, hInstance, NULL
+            );
+    } else {
+        if (isAppRunningAsAdmin)
+            hwnd = CreateWindowEx(
+                0,
+                L"MiniLauncher",
+                L"WTool v1.0 (x86) - {Administrator}",
+                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                x, y,
+                640, 480,
+                NULL, NULL, hInstance, NULL
+            );
+        else
+            hwnd = CreateWindowEx(
+                0,
+                L"MiniLauncher",
+                L"WTool v1.0 (x86)",
+                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                x, y,
+                640, 480,
+                NULL, NULL, hInstance, NULL
+            );
+    }
 
     // Aggiunto: inizializzazione struttura tray icon
     nid.cbSize = sizeof(NOTIFYICONDATA);
