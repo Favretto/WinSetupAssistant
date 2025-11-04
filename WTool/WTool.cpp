@@ -251,9 +251,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             break;
         case BTN_EXPLORER:
-            retSE = ShellExecute(hwnd, L"open", L"control.exe", L"folders", NULL, SW_SHOWNORMAL);
+            retSE = ShellExecute(hwnd, L"runas", L"rundll32.exe", L"sysdm.cpl,EditEnvironmentVariables", NULL, SW_SHOWNORMAL);
             if ((INT_PTR)retSE <= 32) {
-                MessageBox(hwnd, L"Comando non trovato!", L"control folders not found ...", MB_OK | MB_ICONERROR);
+                MessageBox(hwnd, L"Impossibile aprire le variabili di ambiente!", L"Errore apertura ...", MB_OK | MB_ICONERROR);
             }
             break;
         case BTN_DATETIME:
@@ -1052,7 +1052,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         50, 290, 250, 30,
         hwnd, (HMENU)BTN_SCHEDULER, hInstance, NULL);
 
-    CreateWindowEx(0, L"BUTTON", L"Opzioni Files",
+    CreateWindowEx(0, L"BUTTON", L"Variabili d'ambiente",
         WS_CHILD | WS_VISIBLE,
         50, 330, 250, 30,
         hwnd, (HMENU)BTN_EXPLORER, hInstance, NULL);
