@@ -78,6 +78,7 @@ HANDLE hMutex = NULL;
 HWND hLabel = NULL;
 HWND hLabelAHCI = NULL;
 // HWND hLabelPS2 = NULL;
+HWND hBtnMRT = NULL, hBtnDiskPart = NULL, hBtnDateTime = NULL, hBtnNICs = NULL, hBtnEnvVars = NULL;
 HWND hwnd = NULL;
 
 void SetAlwaysOnTop(HWND hwnd, bool enable);
@@ -405,7 +406,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             if ((INT_PTR)retSE == 5)
                 MessageBox(hwnd, L"Permessi insufficienti per accedere alla funzione!", L"Errore", MB_OK | MB_ICONERROR);
-            if ((INT_PTR)retSE <= 32)
+            else if ((INT_PTR)retSE <= 32)
                 MessageBox(hwnd, L"Comando non trovato!", L"cmd.exe not found ...", MB_OK | MB_ICONERROR);
 
             break;
@@ -977,6 +978,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     Shell_NotifyIcon(NIM_ADD, &nid); // aggiunge l'icona nella tray
 
+    // Impostazione FONTS ...
+    HFONT hFontTextBoxes = CreateFontW(
+        15,                 // altezza del font in pixel
+        0,                  // larghezza carattere (0 = proporzionale)
+        0, 0,               // angolo escapement e orientamento
+        FW_NORMAL,          // spessore (FW_BOLD per grassetto)
+        TRUE, FALSE, FALSE,// italic, underline, strikeout
+        ANSI_CHARSET,       // charset
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY,
+        DEFAULT_PITCH | FF_SWISS, // stile font
+        L"Courier New"         // nome font nativo Windows (alternative: "Segoe UI", "Courier New", "Arial")
+    );
+
+    HFONT hFontButtons = CreateFontW(
+        16,                 // altezza del font in pixel
+        0,                  // larghezza carattere (0 = proporzionale)
+        0, 0,               // angolo escapement e orientamento
+        FW_NORMAL,          // spessore (FW_BOLD per grassetto)
+        FALSE, FALSE, FALSE,// italic, underline, strikeout
+        ANSI_CHARSET,       // charset
+        OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY,
+        DEFAULT_PITCH | FF_SWISS, // stile font
+        L"Courier New"         // nome font nativo Windows (alternative: "Segoe UI", "Courier New", "Arial")
+    );
+
     // Label Header
     hLabel = CreateWindowEx(
         0,
@@ -1017,7 +1047,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     //);
 
     // Pulsanti
-    CreateWindowEx(0, L"BUTTON", L"NICs",
+    hBtnNICs = CreateWindowEx(0, L"BUTTON", L"🛡️NICs",
         WS_CHILD | WS_VISIBLE,
         50, 50, 250, 30,
         hwnd, (HMENU)BTN_NICS, hInstance, NULL);
@@ -1052,12 +1082,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         50, 290, 250, 30,
         hwnd, (HMENU)BTN_SCHEDULER, hInstance, NULL);
 
-    CreateWindowEx(0, L"BUTTON", L"Variabili d'ambiente",
+    hBtnEnvVars = CreateWindowEx(0, L"BUTTON", L"🛡️Variabili d'ambiente",
         WS_CHILD | WS_VISIBLE,
         50, 330, 250, 30,
         hwnd, (HMENU)BTN_EXPLORER, hInstance, NULL);
 
-    CreateWindowEx(0, L"BUTTON", L"Data&&Ora",
+    hBtnDateTime=CreateWindowEx(0, L"BUTTON", L"🛡️Data&&Ora",
         WS_CHILD | WS_VISIBLE,
         50, 370, 250, 30,
         hwnd, (HMENU)BTN_DATETIME, hInstance, NULL);
@@ -1066,21 +1096,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         WS_CHILD | WS_VISIBLE,
         320, 50, 250, 30,
         hwnd, (HMENU)BTN_PERFS, hInstance, NULL);
-
-    //HFONT hFont = (HFONT) GetStockObject(DEFAULT_GUI_FONT);
-    HFONT hFont = CreateFontW(
-        15,                 // altezza del font in pixel
-        0,                  // larghezza carattere (0 = proporzionale)
-        0, 0,               // angolo escapement e orientamento
-        FW_NORMAL,          // spessore (FW_BOLD per grassetto)
-        TRUE, FALSE, FALSE,// italic, underline, strikeout
-        ANSI_CHARSET,       // charset
-        OUT_DEFAULT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY,
-        DEFAULT_PITCH | FF_SWISS, // stile font
-        L"Courier New"         // nome font nativo Windows (alternative: "Segoe UI", "Courier New", "Arial")
-    );
 
     // BEGIN: SWAP TEXTBOX MULTILINE ...
     // 
@@ -1095,7 +1110,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         hInstance,
         NULL);
 
-    SendMessageW(hSwapInfo, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(hSwapInfo, WM_SETFONT, (WPARAM)hFontTextBoxes, TRUE);
 
     SetWindowTextW(hSwapInfo, L"Con disco SSD o M.2:\r\nPer preservare la durata del disco, impostare un file di swap statico (MIN = MAX) di dimensione pari al doppio della RAM installata.\r\n\r\nEsempio:\r\nSe la RAM è di 8 GB, il file di swap statico ideale sarà:\r\n8 GB × 2 = 16 GB → 16 × 1024  = 16.384 MB.");
 
@@ -1106,7 +1121,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         320, 170, 250, 30,
         hwnd, (HMENU)BTN_THEME, hInstance, NULL);
 
-    CreateWindowEx(0, L"BUTTON", L"Disk Part",
+    hBtnDiskPart = CreateWindowEx(0, L"BUTTON", L"🛡️ Disk Part",
         WS_CHILD | WS_VISIBLE,
         320, 210, 125, 30,
         hwnd, (HMENU)BTN_DISKPART, hInstance, NULL);
@@ -1129,7 +1144,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         hInstance,
         NULL);
 
-    SendMessageW(hDiskPartInfo, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(hDiskPartInfo, WM_SETFONT, (WPARAM)hFontTextBoxes, TRUE);
 
     SetWindowTextW(hDiskPartInfo, L"Dove non arriva Gestione Dischi:\r\nUsare DISKPART\r\n\r\nEsempio pulizia disco:\r\nlist disk\r\nselect disk 1\r\nclean\r\n\r\nEsempio eliminazione di una partizione:\r\nselect disk 1\r\nlist partition\r\nselect partition 3\r\ndelete partition\r\n\r\nPer uscire:\r\nexit");
 
@@ -1143,10 +1158,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         445, 330, 125, 30,
         hwnd, (HMENU)BTN_UNINSTALLER, hInstance, NULL);
     
-    CreateWindowEx(0, L"BUTTON", L"Rimozione Malware",
+    hBtnMRT = CreateWindowEx(0, L"BUTTON", L"🛡️ Rimozione Malware",
         WS_CHILD | WS_VISIBLE,
         320, 370, 250, 30,
         hwnd, (HMENU)BTN_MRT, hInstance, NULL);
+
+    // Imposto il FONT dei caratteri della casella di testo anche ai bottoni ...
+    SendMessage(hBtnNICs, WM_SETFONT, (WPARAM)hFontButtons, TRUE);
+    SendMessage(hBtnEnvVars, WM_SETFONT, (WPARAM)hFontButtons, TRUE);
+    SendMessage(hBtnDateTime, WM_SETFONT, (WPARAM)hFontButtons, TRUE);
+    SendMessage(hBtnDiskPart, WM_SETFONT, (WPARAM)hFontButtons, TRUE);
+    SendMessage(hBtnMRT, WM_SETFONT, (WPARAM)hFontButtons, TRUE);
 
     //370
     // 
@@ -1213,7 +1235,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Aggiunge voci ai sottomenu ...
     AppendMenu(hFileMenu, MF_STRING, IDM_TASKMGR, L"Task Manager");
-    AppendMenu(hFileMenu, MF_STRING, IDM_ADMCMD, L"Console (Admin)");
+    AppendMenu(hFileMenu, MF_STRING, IDM_ADMCMD, L"🛡️Console");
     AppendMenu(hFileMenu, MF_STRING, IDM_GODMODE, L"Crea God Mode sul desktop");
     AppendMenu(hFileMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hFileMenu, MF_STRING, IDM_FILE_EXIT, L"Esci");
