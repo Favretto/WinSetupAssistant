@@ -25,6 +25,7 @@ NOTIFYICONDATA nid = { 0 };         // Aggiunto: struttura per l’icona di noti
 #define BTN_TPM 2
 #define BTN_LUSRMGR 3
 #define BTN_SHARING 4
+#define BTN_RECPTS 19
 #define BTN_EVENTS 5
 #define BTN_DEVS 6
 #define BTN_SCHEDULER 7
@@ -237,6 +238,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             retSE = ShellExecute(hwnd, L"open", L"eventvwr.msc", NULL, NULL, SW_SHOWNORMAL);
             if ((INT_PTR)retSE <= 32) {
                 MessageBox(hwnd, L"Comando non trovato!", L"eventvwr.msc not found ...", MB_OK | MB_ICONERROR);
+            }
+            break;
+        case BTN_RECPTS:
+            retSE = ShellExecute(hwnd, L"open", L"SystemPropertiesProtection.exe", NULL, NULL, SW_SHOWNORMAL);
+            if ((INT_PTR)retSE <= 32) {
+                MessageBox(hwnd, L"Comando non trovato!", L"SystemPropertiesProtection.exe not found ...", MB_OK | MB_ICONERROR);
             }
             break;
         case BTN_DEVS:
@@ -1059,13 +1066,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     CreateWindowEx(0, L"BUTTON", L"Utenti&&Gruppi",
         WS_CHILD | WS_VISIBLE,
-        50, 130, 250, 30,
+        50, 130, 125, 30,
         hwnd, (HMENU)BTN_LUSRMGR, hInstance, NULL);
 
     CreateWindowEx(0, L"BUTTON", L"Condivisioni",
         WS_CHILD | WS_VISIBLE,
-        50, 170, 250, 30,
+        175, 130, 125, 30,
         hwnd, (HMENU)BTN_SHARING, hInstance, NULL);
+
+    CreateWindowEx(0, L"BUTTON", L"Punti di Ripristino",
+        WS_CHILD | WS_VISIBLE,
+        50, 170, 250, 30,
+        hwnd, (HMENU)BTN_RECPTS, hInstance, NULL);
 
     CreateWindowEx(0, L"BUTTON", L"Eventi",
         WS_CHILD | WS_VISIBLE,
